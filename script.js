@@ -15,7 +15,7 @@ function init() {
     initTheme();
     document.getElementById('datePurchased').valueAsDate = new Date();
     document.getElementById('dateSold').valueAsDate = new Date();
-    
+
     // Migration: Mark existing items as purchases
     let needsMigration = false;
     inventory.forEach(item => {
@@ -24,15 +24,15 @@ function init() {
             needsMigration = true;
         }
     });
-    
+
     if (needsMigration) {
         saveData();
     }
-    
+
     updateDropdown();
     renderTable();
     updateInventoryHealth();
-    updateProfitChart(); // Now this function exists
+    updateProfitChart();
 }
 
 // Theme functions
@@ -51,25 +51,25 @@ function toggleTheme() {
 // Profit Chart Implementation
 function updateProfitChart() {
     const ctx = document.getElementById('profitChart').getContext('2d');
-    
+
     // Destroy previous chart if it exists
     if (profitChart) {
         profitChart.destroy();
     }
-    
+
     // Filter sales data and calculate daily profits
     const sales = inventory.filter(item => !item.isPurchase);
     const dailyProfits = {};
-    
+
     sales.forEach(sale => {
         const date = sale.dateSold ? sale.dateSold.split('T')[0] : new Date().toISOString().split('T')[0];
         dailyProfits[date] = (dailyProfits[date] || 0) + sale.profit;
     });
-    
+
     // Sort dates and prepare chart data
     const labels = Object.keys(dailyProfits).sort();
     const data = labels.map(date => dailyProfits[date]);
-    
+
     // Create new chart
     profitChart = new Chart(ctx, {
         type: 'bar',
@@ -118,7 +118,7 @@ function showNotification(message, isSuccess = true) {
         <p>${message}</p>
     `;
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         notification.classList.add('fade-out');
         setTimeout(() => notification.remove(), 300);
@@ -128,17 +128,17 @@ function showNotification(message, isSuccess = true) {
 // Utility functions
 function formatDate(dateString) {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString(undefined, { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
+    return new Date(dateString).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
     });
 }
 
 function formatCurrency(amount) {
-    return new Intl.NumberFormat('en-US', { 
-        style: 'currency', 
-        currency: 'USD' 
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
     }).format(amount);
 }
 
@@ -149,43 +149,43 @@ function saveData() {
 // Inventory management functions
 function getAvailableInventory() {
     const available = {};
-    
+
     inventory.filter(item => item.isPurchase).forEach(item => {
         const key = item.itemName.toLowerCase();
         available[key] = (available[key] || 0) + item.quantityBought;
     });
-    
+
     inventory.filter(item => !item.isPurchase).forEach(item => {
         const key = item.itemName.toLowerCase();
         if (available[key] !== undefined) {
             available[key] -= item.quantitySold;
         }
     });
-    
+
     return available;
 }
 
 function updateInventoryHealth() {
     const available = getAvailableInventory();
     const purchaseItems = inventory.filter(item => item.isPurchase);
-    
-    const critical = purchaseItems.filter(item => 
+
+    const critical = purchaseItems.filter(item =>
         available[item.itemName.toLowerCase()] <= 0
     ).map(item => item.itemName);
-    
-    const low = purchaseItems.filter(item => 
+
+    const low = purchaseItems.filter(item =>
         available[item.itemName.toLowerCase()] === 1
     ).map(item => item.itemName);
-    
-    const healthy = purchaseItems.filter(item => 
+
+    const healthy = purchaseItems.filter(item =>
         available[item.itemName.toLowerCase()] > 1
     ).map(item => item.itemName);
-    
+
     // Update UI elements
     document.getElementById('criticalItems').querySelector('p').textContent = `${critical.length} items`;
     document.getElementById('lowItems').querySelector('p').textContent = `${low.length} items`;
     document.getElementById('healthyItems').querySelector('p').textContent = `${healthy.length} items`;
-    
+
     document.getElementById('criticalList').innerHTML = critical.map(item => `<div>${item}</div>`).join('');
     document.getElementById('lowList').innerHTML = low.map(item => `<div>${item}</div>`).join('');
     document.getElementById('healthyList').innerHTML = healthy.map(item => `<div>${item}</div>`).join('');
@@ -194,14 +194,14 @@ function updateInventoryHealth() {
 function updateDropdown() {
     const dropdown = document.getElementById('soldItem');
     dropdown.innerHTML = '<option value="">Select Item</option>';
-    
+
     const available = getAvailableInventory();
     const itemGroups = {};
-    
+
     inventory.filter(item => item.isPurchase).forEach((item, index) => {
         const key = item.itemName.toLowerCase();
         const availableQty = available[key] || 0;
-        
+
         if (availableQty > 0) {
             if (!itemGroups[key]) {
                 itemGroups[key] = {
@@ -214,7 +214,7 @@ function updateDropdown() {
             itemGroups[key].indices.push(index);
         }
     });
-    
+
     for (const group of Object.values(itemGroups)) {
         const option = document.createElement('option');
         option.value = group.indices.join(',');
@@ -228,23 +228,25 @@ function renderTable() {
     const tableBody = document.getElementById('tableBody');
     const categoryFilter = document.getElementById('categoryFilter').value;
     const available = getAvailableInventory();
-    
+
     tableBody.innerHTML = inventory.map(item => {
         if (categoryFilter !== 'all' && item.category !== categoryFilter) return '';
-        
+
         const remaining = available[item.itemName.toLowerCase()] || 0;
         let status = '';
-        
+
         if (remaining <= 0) status = 'status-critical">Sold Out';
         else if (remaining === 1) status = 'status-low">Low Stock';
         else status = 'status-good">In Stock';
-        
+
+        // Add weight column after Qty Bought
         return `
             <tr>
                 <td>${item.itemName}</td>
                 <td><span class="category-tag category-${item.category}">${item.category}</span></td>
                 <td>${formatCurrency(item.buyPrice)}</td>
                 <td>${item.quantityBought}</td>
+                <td>${item.weight ? item.weight : '-'}</td>
                 <td>${item.isPurchase ? remaining : '-'} ${item.isPurchase ? `<span class="status-badge ${status}</span>` : ''}</td>
                 <td>${item.isPurchase ? formatDate(item.datePurchased) : '-'}</td>
                 <td>${formatCurrency(item.finalCost)}</td>
@@ -256,7 +258,7 @@ function renderTable() {
             </tr>
         `;
     }).join('');
-    
+
     updateInventoryHealth();
 }
 
@@ -265,15 +267,16 @@ function resetForms() {
     document.getElementById('itemName').value = '';
     document.getElementById('buyPrice').value = '';
     document.getElementById('quantityBought').value = '1';
+    document.getElementById('weight').value = ''; // Reset weight
     document.getElementById('restockThreshold').value = '1';
     document.getElementById('discount').value = '';
     document.getElementById('datePurchased').valueAsDate = new Date();
-    
+
     document.getElementById('sellPrice').value = '';
     document.getElementById('quantitySold').value = '1';
     document.getElementById('customer').value = '';
     document.getElementById('dateSold').valueAsDate = new Date();
-    
+
     updateDropdown();
 }
 
@@ -282,6 +285,7 @@ function addPurchase() {
         'item name': document.getElementById('itemName'),
         'buy price': document.getElementById('buyPrice'),
         'quantity': document.getElementById('quantityBought'),
+        'weight': document.getElementById('weight'),
         'date purchased': document.getElementById('datePurchased')
     };
 
@@ -291,6 +295,7 @@ function addPurchase() {
     const category = document.getElementById('category').value;
     const buyPrice = parseFloat(fields['buy price'].value);
     const quantityBought = parseInt(fields['quantity'].value) || 1;
+    const weight = parseInt(fields['weight'].value) || 0;
     const restockThreshold = parseInt(document.getElementById('restockThreshold').value) || 1;
     const discount = parseFloat(document.getElementById('discount').value) || 0;
     const discountType = document.getElementById('discountType').value;
@@ -313,6 +318,7 @@ function addPurchase() {
         category,
         buyPrice,
         quantityBought,
+        weight, // Store weight
         restockThreshold,
         datePurchased,
         discount: `${discount}${discountType === 'percent' ? '%' : '$'}`,
@@ -333,6 +339,7 @@ function addPurchase() {
     resetForms();
 }
 
+/*********** RECORD SALE FUNCTION (FIXED, with Weight) START ***********/
 function recordSale() {
     const fields = {
         'item': document.getElementById('soldItem'),
@@ -350,10 +357,10 @@ function recordSale() {
     const dateSold = fields['date sold'].value || new Date().toISOString().split('T')[0];
 
     const purchaseItem = inventory[selectedIndices[0]];
-    
-    // Calculate profit using the correct method
-    const unitCost = -purchaseItem.finalCost / purchaseItem.quantityBought;
-    const profitPerUnit = unitCost + sellPrice;
+
+    // Calculate profit using per-item cost
+    const perItemCost = purchaseItem.finalCost / purchaseItem.quantityBought;
+    const profitPerUnit = sellPrice - perItemCost;
     const totalProfit = profitPerUnit * quantitySold;
 
     inventory.push({
@@ -361,7 +368,8 @@ function recordSale() {
         category: purchaseItem.category,
         buyPrice: purchaseItem.buyPrice,
         quantityBought: quantitySold,
-        finalCost: purchaseItem.finalCost,
+        weight: purchaseItem.weight, // Add weight to sale record
+        finalCost: perItemCost * quantitySold,
         sellPrice: sellPrice,
         quantitySold: quantitySold,
         dateSold: dateSold,
@@ -377,6 +385,7 @@ function recordSale() {
     showNotification(`Sale recorded! Profit: ${formatCurrency(totalProfit)}`);
     resetForms();
 }
+/*********** RECORD SALE FUNCTION (FIXED, with Weight) END ***********/
 
 function clearHistory() {
     if (confirm("⚠️ Delete ALL history? This cannot be undone!")) {
