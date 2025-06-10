@@ -297,7 +297,6 @@
             background-color: rgba(33, 150, 243, 0.1);
             color: #2196F3;
         }
-        /* Dashboard Styles */
         .dashboard {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -385,15 +384,58 @@
     </style>
 </head>
 <body>
+    <button class="theme-toggle" id="themeBtn" type="button" style="position:fixed;top:20px;right:20px;z-index:2000;">
+        <span id="theme-icon">🌙</span> Theme
+    </button>
+    <button id="profileBtn" class="theme-toggle" type="button" style="position:fixed;top:70px;right:20px;z-index:2000;">
+    <span>👤</span> Profile
+</button>
+
+<div id="profileModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:3000;background:rgba(0,0,0,0.35);align-items:center;justify-content:center;">
+    <div style="background:var(--card-bg);color:var(--text);border-radius:12px;max-width:350px;width:90vw;padding:28px 18px;box-shadow:0 8px 32px rgba(0,0,0,0.18);position:relative;">
+        <button onclick="closeProfile()" style="position:absolute;top:10px;right:10px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text);">✖️</button>
+        <div style="text-align:center;">
+            <div style="margin-bottom:18px;">
+                <img id="profilePicPreview" src="https://ui-avatars.com/api/?name=User" alt="Profile" style="width:70px;height:70px;border-radius:50%;object-fit:cover;border:2px solid var(--accent);background:#eee;">
+            </div>
+            <input type="file" id="profilePicInput" accept="image/*" style="display:none;">
+            <button type="button" onclick="document.getElementById('profilePicInput').click()" style="margin-bottom:12px;">Change Picture</button>
+        </div>
+        <form id="profileForm">
+            <div class="form-group">
+                <label for="profileUsername">Username</label>
+                <input type="text" id="profileUsername" required>
+            </div>
+            <div class="form-group">
+                <label for="profilePassword">New Password</label>
+                <input type="password" id="profilePassword" placeholder="Leave blank to keep current">
+            </div>
+            <div class="form-group">
+                <label for="profilePassword2">Confirm Password</label>
+                <input type="password" id="profilePassword2" placeholder="Leave blank to keep current">
+            </div>
+            <div id="profile-error" class="form-error"></div>
+            <button type="submit" style="margin-top:10px;">Save Changes</button>
+        </form>
+        <button onclick="logout()" class="secondary" style="width:100%;margin-top:16px;">Logout</button>
+        <button onclick="deleteAccount()" class="danger" style="width:100%;margin-top:10px;">Delete Account</button>
+    </div>
+</div>
     <div class="container">
         <header>
             <h1>🍿 Snack Tracker</h1>
             <div>
-                <button onclick="clearHistory()" class="danger" style="margin-right: 10px;">
+               <button onclick="exportData()" class="secondary" style="margin-right: 10px;">
+         ⬇️ Export Data
+        </button>
+
+        <button onclick="document.getElementById('importInput').click()" class="secondary">
+          ⬆️ Import Data
+        </button>
+        <input type="file" id="importInput" accept=".json" style="display:none">
+
+        <button onclick="clearHistory()" class="danger" style="margin-right: 10px;">
                     🗑️ Clear Data
-                </button>
-                <button class="theme-toggle" onclick="toggleTheme()">
-                    <span id="theme-icon">🌙</span> Theme
                 </button>
             </div>
         </header>
@@ -451,7 +493,6 @@
                     <label for="quantityBought">Quantity</label>
                     <input type="number" id="quantityBought" min="1" value="1" required>
                 </div>
-                <!-- Added Weight Field -->
                 <div class="form-group">
                     <label for="weight">Weight (grams)</label>
                     <input type="number" id="weight" min="1" step="1" required>
@@ -626,39 +667,217 @@
             </table>
         </div>
     </div>
-    <script>
-        // Constants
+    <script type="module">
+
+        if (!sessionStorage.getItem("snackapp_user")) {
+    window.location.href = "login.html";
+}
+// Move ALL imports to the top, in this order:
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-analytics.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyAZ4zaX7UvzxBzVNk_z3AFhOUbIMC1XJRk",
+    authDomain: "stsync-5a398.firebaseapp.com",
+    projectId: "stsync-5a398",
+    storageBucket: "stsync-5a398.firebasestorage.app",
+    messagingSenderId: "354308192242",
+    appId: "1:354308192242:web:88244dd28aae2f7f875d6b",
+    measurementId: "G-908D6RKV30"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+const db = getFirestore(app);
+
         const CATEGORIES = {
             CHIPS: 'chips',
             CANDY: 'candy',
             DRINKS: 'drinks'
         };
-        // Global variables
-        let inventory = JSON.parse(localStorage.getItem('snackInventory')) || [];
+        let inventory = [];
         let profitChart = null;
         let cashFlowChart = null;
         let categoryChart = null;
         let currentTheme = localStorage.getItem('theme') || 'light';
-        // Dashboard chart variables
         let categoryProfitChart = null;
         let categoryVolumeChart = null;
         let categoryComparisonChart = null;
         let itemPerformanceChart = null;
-        // Initialize theme
-        function initTheme() {
-            document.documentElement.setAttribute('data-theme', currentTheme);
-            document.getElementById('theme-icon').textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+
+        async function saveData() {
+            await setDoc(doc(db, "inventory", "main"), { list: inventory });
         }
-        // Toggle between dark/light mode
-        function toggleTheme() {
-            currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', currentTheme);
-            document.getElementById('theme-icon').textContent = currentTheme === 'dark' ? '☀️' : '🌙';
-            localStorage.setItem('theme', currentTheme);
-            updateChartsTheme();
+        async function loadData() {
+            const docSnap = await getDoc(doc(db, "inventory", "main"));
+            if (docSnap.exists()) {
+                inventory = docSnap.data().list || [];
+            } else {
+                inventory = [];
+            }
         }
-        // Update charts to match current theme
-        function updateChartsTheme() {
+
+// Profile/Settings Modal Logic
+const profileBtn = document.getElementById('profileBtn');
+const profileModal = document.getElementById('profileModal');
+const profileForm = document.getElementById('profileForm');
+const profilePicInput = document.getElementById('profilePicInput');
+const profilePicPreview = document.getElementById('profilePicPreview');
+const profileError = document.getElementById('profile-error');
+
+profileBtn.onclick = openProfile;
+function openProfile() {
+    const username = sessionStorage.getItem("snackapp_user");
+    loadUserProfile(username);
+    profileModal.style.display = "flex";
+}
+function closeProfile() {
+    profileModal.style.display = "none";
+}
+window.closeProfile = closeProfile;
+
+async function loadUserProfile(username) {
+    const usersDoc = await getDoc(doc(db, "users", "all"));
+    if (!usersDoc.exists() || !usersDoc.data().list) return;
+    const users = usersDoc.data().list;
+    const user = users.find(u => u.username === username);
+    if (!user) return;
+    document.getElementById('profileUsername').value = user.username;
+    profilePicPreview.src = user.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}`;
+}
+
+profilePicInput.onchange = function() {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        profilePicPreview.src = e.target.result;
+        profilePicPreview.dataset.newpic = e.target.result;
+    };
+    reader.readAsDataURL(file);
+};
+
+profileForm.onsubmit = async function(e) {
+    e.preventDefault();
+    profileError.textContent = "";
+    const newUsername = document.getElementById('profileUsername').value.trim();
+    const password = document.getElementById('profilePassword').value;
+    const password2 = document.getElementById('profilePassword2').value;
+    const currentUsername = sessionStorage.getItem("snackapp_user");
+    let usersDoc = await getDoc(doc(db, "users", "all"));
+    let users = usersDoc.exists() && usersDoc.data().list ? usersDoc.data().list : [];
+    // Username check
+    if (newUsername.length < 3) {
+        profileError.textContent = "Username must be at least 3 characters.";
+        return;
+    }
+    if (newUsername !== currentUsername && users.find(u => u.username === newUsername)) {
+        profileError.textContent = "Username already taken.";
+        return;
+    }
+    // Password check
+    if (password || password2) {
+        if (password !== password2) {
+            profileError.textContent = "Passwords do not match.";
+            return;
+        }
+        if (password.length < 4) {
+            profileError.textContent = "Password must be at least 4 characters.";
+            return;
+        }
+    }
+    // Update user
+    const userIndex = users.findIndex(u => u.username === currentUsername);
+    if (userIndex === -1) {
+        profileError.textContent = "User not found.";
+        return;
+    }
+    users[userIndex].username = newUsername;
+    if (password) users[userIndex].password = password;
+    // Profile pic
+    if (profilePicPreview.dataset.newpic) {
+        users[userIndex].profilePic = profilePicPreview.dataset.newpic;
+        delete profilePicPreview.dataset.newpic;
+    }
+    await setDoc(doc(db, "users", "all"), { list: users });
+    sessionStorage.setItem("snackapp_user", newUsername);
+    showToast("Profile updated!", "success");
+    closeProfile();
+    location.reload();
+};
+
+function logout() {
+    sessionStorage.removeItem("snackapp_user");
+    window.location.href = "login.html";
+}
+window.logout = logout;
+
+async function deleteAccount() {
+    if (!confirm("Are you sure you want to delete your account? This cannot be undone!")) return;
+    const username = sessionStorage.getItem("snackapp_user");
+    let usersDoc = await getDoc(doc(db, "users", "all"));
+    let users = usersDoc.exists() && usersDoc.data().list ? usersDoc.data().list : [];
+    users = users.filter(u => u.username !== username);
+    await setDoc(doc(db, "users", "all"), { list: users });
+    sessionStorage.removeItem("snackapp_user");
+    showToast("Account deleted.", "success");
+    setTimeout(() => window.location.href = "register.html", 1200);
+}
+window.deleteAccount = deleteAccount;
+
+        // Export data as JSON file
+window.exportData = async function() {
+    await loadData();
+    const dataStr = JSON.stringify(inventory, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "snackapp-inventory.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Data exported!", "success");
+};
+
+// Import data from JSON file
+document.getElementById('importInput').addEventListener('change', async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(event) {
+        try {
+            const imported = JSON.parse(event.target.result);
+            if (!Array.isArray(imported)) throw new Error("Invalid file format.");
+            inventory = imported;
+            await saveData();
+            updateDropdown();
+            renderTable();
+            showToast("Data imported!", "success");
+        } catch (err) {
+            showToast("Import failed: " + err.message, "error");
+        }
+    };
+    reader.readAsText(file);
+});
+
+function initTheme() {
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    document.getElementById('theme-icon').textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+}
+function toggleTheme() {
+    currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    document.getElementById('theme-icon').textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem('theme', currentTheme);
+    updateChartsTheme();
+}
+
+function updateChartsTheme() {
             const textColor = currentTheme === 'dark' ? '#E0E0E0' : '#333333';
             const gridColor = currentTheme === 'dark' ? '#424242' : '#E0E0E0';
             if (profitChart) {
@@ -709,7 +928,6 @@
                 itemPerformanceChart.update();
             }
         }
-        // Auto-capitalize first letter of inputs
         document.addEventListener('input', function(e) {
             if (e.target.id === 'itemName' || e.target.id === 'customer') {
                 if (e.target.value.length === 1) {
@@ -717,7 +935,6 @@
                 }
             }
         });
-        // Utility functions
         function showToast(message, type = 'success') {
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
@@ -736,9 +953,6 @@
         function formatCurrency(amount) {
             return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
         }
-        function saveData() {
-            localStorage.setItem('snackInventory', JSON.stringify(inventory));
-        }
         function validateForm(fields) {
             for (const [fieldName, element] of Object.entries(fields)) {
                 if (!element.value || element.value.toString().trim() === '') {
@@ -754,17 +968,14 @@
             }
             return true;
         }
-        // Calculate available inventory
         function getAvailableInventory() {
             const available = {};
-            // First pass: Sum all purchases
             inventory.forEach(item => {
                 if (item.isPurchase) {
                     const key = item.itemName.toLowerCase();
                     available[key] = (available[key] || 0) + item.quantityBought;
                 }
             });
-            // Second pass: Subtract all sales
             inventory.forEach(item => {
                 if (!item.isPurchase) {
                     const key = item.itemName.toLowerCase();
@@ -775,39 +986,37 @@
             });
             return available;
         }
+
         function updateInventoryHealth() {
-            const available = getAvailableInventory();
-            const purchaseItems = inventory.filter(item => item.isPurchase);
-            let critical = [];
-            let low = [];
-            let healthy = [];
-            // Categorize items
-            purchaseItems.forEach(item => {
-                const key = item.itemName.toLowerCase();
-                const qty = available[key] || 0;
-                if (qty <= 0) {
-                    critical.push(item.itemName);
-                } else if (qty === 1) {
-                    low.push(item.itemName);
-                } else {
-                    healthy.push(item.itemName);
-                }
-            });
-            // Update counts
-            document.getElementById('criticalItems').querySelector('p').textContent = `${critical.length} items`;
-            document.getElementById('lowItems').querySelector('p').textContent = `${low.length} items`;
-            document.getElementById('healthyItems').querySelector('p').textContent = `${healthy.length} items`;
-            // Update lists
-            document.getElementById('criticalList').innerHTML = critical.map(item => `<div>${item}</div>`).join('');
-            document.getElementById('lowList').innerHTML = low.map(item => `<div>${item}</div>`).join('');
-            document.getElementById('healthyList').innerHTML = healthy.map(item => `<div>${item}</div>`).join('');
+    const available = getAvailableInventory();
+    const purchaseItems = inventory.filter(item => item.isPurchase);
+    let critical = new Set();
+    let low = new Set();
+    let healthy = new Set();
+    purchaseItems.forEach(item => {
+        const key = item.itemName;
+        const qty = available[item.itemName.toLowerCase()] || 0;
+        if (qty <= 0) {
+            critical.add(key);
+        } else if (qty === 1) {
+            low.add(key);
+        } else {
+            healthy.add(key);
         }
-        function updateDropdown() {
+    });
+    document.getElementById('criticalItems').querySelector('p').textContent = `${critical.size} items`;
+    document.getElementById('lowItems').querySelector('p').textContent = `${low.size} items`;
+    document.getElementById('healthyItems').querySelector('p').textContent = `${healthy.size} items`;
+    document.getElementById('criticalList').innerHTML = Array.from(critical).map(item => `<div>${item}</div>`).join('');
+    document.getElementById('lowList').innerHTML = Array.from(low).map(item => `<div>${item}</div>`).join('');
+    document.getElementById('healthyList').innerHTML = Array.from(healthy).map(item => `<div>${item}</div>`).join('');
+}
+
+            function updateDropdown() {
             const dropdown = document.getElementById('soldItem');
             dropdown.innerHTML = '<option value="">Select Item</option>';
             const available = getAvailableInventory();
             const purchaseItems = inventory.filter(item => item.isPurchase);
-            // Group available items by name
             const itemGroups = {};
             purchaseItems.forEach((item, index) => {
                 const key = item.itemName.toLowerCase();
@@ -824,12 +1033,10 @@
                     itemGroups[key].indices.push(index);
                 }
             });
-            // Add available items to dropdown
             for (const group of Object.values(itemGroups)) {
                 const option = document.createElement('option');
                 option.value = group.indices.join(',');
                 option.textContent = `${group.name} (${group.available} left, Cost: ${formatCurrency(group.cost)})`;
-                // Highlight low stock
                 if (group.available === 1) {
                     option.style.color = '#FF9800';
                 }
@@ -841,13 +1048,10 @@
             tableBody.innerHTML = '';
             const categoryFilter = document.getElementById('categoryFilter').value;
             const available = getAvailableInventory();
-            // Show all transactions
             inventory.forEach((item, index) => {
-                // Skip if doesn't match category filter
                 if (categoryFilter !== 'all' && item.category !== categoryFilter) return;
                 const remaining = available[item.itemName.toLowerCase()] || 0;
                 const row = document.createElement('tr');
-                // Determine stock status
                 let status = '';
                 if (remaining <= 0) {
                     status = '<span class="status-badge status-critical">Sold Out</span>';
@@ -875,24 +1079,20 @@
             });
             updateInventoryHealth();
         }
-        // Dashboard navigation
         function showSection(sectionId) {
             document.querySelectorAll('.section').forEach(section => {
                 section.classList.remove('active');
             });
             document.getElementById(sectionId).classList.add('active');
-            // Load specific content when sections are shown
             if (sectionId === 'item-performance') {
                 updateItemButtons();
             } else if (sectionId === 'overall-performance') {
                 updateOverallPerformanceCharts();
             }
-            // Reset forms when showing add-purchase or record-sale sections
             if (sectionId === 'add-purchase' || sectionId === 'record-sale') {
                 resetForms();
             }
         }
-        // Reset all form fields
         function resetForms() {
             document.getElementById('itemName').value = '';
             document.getElementById('buyPrice').value = '';
@@ -905,21 +1105,17 @@
             document.getElementById('quantitySold').value = '1';
             document.getElementById('customer').value = '';
             document.getElementById('dateSold').valueAsDate = new Date();
-            // Update dropdown for record sale form
             updateDropdown();
         }
-        // Update item buttons for performance analysis
         function updateItemButtons() {
             const container = document.getElementById('itemButtons');
             container.innerHTML = '';
-            // Get unique items
             const items = {};
             inventory.forEach(item => {
                 if (item.isPurchase) {
                     items[item.itemName] = true;
                 }
             });
-            // Create buttons for each item
             Object.keys(items).forEach(itemName => {
                 const button = document.createElement('div');
                 button.className = 'item-btn';
@@ -928,25 +1124,21 @@
                 container.appendChild(button);
             });
         }
-        // Show analytics for specific item
         function showItemAnalytics(itemName) {
             const container = document.getElementById('item-analytics-container');
             container.innerHTML = '';
-            // Filter relevant records
             const purchases = inventory.filter(item => 
                 item.isPurchase && item.itemName === itemName
             );
             const sales = inventory.filter(item => 
                 !item.isPurchase && item.itemName === itemName
             );
-            // Calculate stats
             const totalPurchased = purchases.reduce((sum, item) => sum + item.quantityBought, 0);
             const totalSold = sales.reduce((sum, item) => sum + item.quantitySold, 0);
             const totalProfit = sales.reduce((sum, item) => sum + item.profit, 0);
             const avgProfit = sales.length > 0 ? totalProfit / sales.length : 0;
             const avgSellPrice = sales.length > 0 ? 
                 sales.reduce((sum, item) => sum + item.sellPrice, 0) / sales.length : 0;
-            // Create stats display
             const statsHTML = `
                 <div class="card">
                     <div class="card-header">
@@ -982,7 +1174,6 @@
                 </div>
             `;
             container.innerHTML = statsHTML;
-            // Create chart
             createItemPerformanceChart(itemName, purchases, sales);
         }
         function createItemPerformanceChart(itemName, purchases, sales) {
@@ -990,12 +1181,10 @@
             if (itemPerformanceChart) {
                 itemPerformanceChart.destroy();
             }
-            // Prepare data for chart
             const labels = [];
             const purchaseData = [];
             const saleData = [];
             const profitData = [];
-            // Group by month
             const monthlyData = {};
             purchases.forEach(purchase => {
                 const date = new Date(purchase.datePurchased);
@@ -1022,7 +1211,6 @@
                 monthlyData[monthYear].sales += sale.quantitySold;
                 monthlyData[monthYear].profit += sale.profit;
             });
-            // Sort by date
             const sortedMonths = Object.keys(monthlyData).sort();
             sortedMonths.forEach(month => {
                 const [year, monthNum] = month.split('-');
@@ -1122,12 +1310,11 @@
             updateCategoryVolumeChart();
             updateCategoryComparisonChart();
         }
-        function updateCategoryProfitChart() {
+                function updateCategoryProfitChart() {
             const ctx = document.getElementById('categoryProfitChart').getContext('2d');
             if (categoryProfitChart) {
                 categoryProfitChart.destroy();
             }
-            // Calculate category profits
             const categoryProfits = {
                 chips: 0,
                 candy: 0,
@@ -1192,7 +1379,6 @@
             if (categoryVolumeChart) {
                 categoryVolumeChart.destroy();
             }
-            // Calculate category volumes
             const categoryVolumes = {
                 chips: { purchased: 0, sold: 0 },
                 candy: { purchased: 0, sold: 0 },
@@ -1250,7 +1436,6 @@
             if (categoryComparisonChart) {
                 categoryComparisonChart.destroy();
             }
-            // Calculate category metrics
             const categoryData = {
                 chips: { profit: 0, items: 0, sales: 0 },
                 candy: { profit: 0, items: 0, sales: 0 },
@@ -1263,7 +1448,6 @@
                     categoryData[item.category].items++;
                 }
             });
-            // Calculate averages
             const labels = ['Chips', 'Candy', 'Drinks'];
             const avgProfit = labels.map(cat => {
                 const data = categoryData[cat.toLowerCase()];
@@ -1344,20 +1528,17 @@
                 }
             });
         }
-        function clearHistory() {
+        async function clearHistory() {
             if (confirm("⚠️ Delete ALL history? This cannot be undone!")) {
                 inventory = [];
-                localStorage.removeItem('snackInventory');
+                await saveData();
                 resetForms();
                 updateDropdown();
                 renderTable();
-                updateProfitChart();
-                updateCashFlowProjection();
-                updateCategoryAnalytics();
                 showToast('All data has been cleared', 'success');
             }
         }
-        function addPurchase() {
+        async function addPurchase() {
             const fields = {
                 'item name': document.getElementById('itemName'),
                 'buy price': document.getElementById('buyPrice'),
@@ -1375,7 +1556,6 @@
             const discount = parseFloat(document.getElementById('discount').value) || 0;
             const discountType = document.getElementById('discountType').value;
             const datePurchased = fields['date purchased'].value || new Date().toISOString().split('T')[0];
-            // Validate final cost
             let finalCost;
             if (discountType === 'percent') {
                 finalCost = buyPrice * (1 - discount / 100);
@@ -1403,18 +1583,13 @@
                 customer: null,
                 isPurchase: true
             });
-            saveData();
+            await saveData();
             updateDropdown();
             renderTable();
-            updateProfitChart();
-            updateCashFlowProjection();
-            updateCategoryAnalytics();
             showToast('Purchase added successfully!');
-            // Reset the form after successful submission
             resetForms();
         }
-        /*********** RECORD SALE FUNCTION (FIXED) START ***********/
-        function recordSale() {
+        async function recordSale() {
             const fields = {
                 'item': document.getElementById('soldItem'),
                 'sell price': document.getElementById('sellPrice'),
@@ -1427,19 +1602,16 @@
             const quantitySold = parseInt(fields['quantity'].value) || 1;
             const customer = document.getElementById('customer').value;
             const dateSold = fields['date sold'].value || new Date().toISOString().split('T')[0];
-            // Get the original purchase record
             const purchaseItem = inventory[selectedIndices[0]];
-            // Use per-item cost, not batch cost, for profit calculation
             const perItemCost = purchaseItem.finalCost / purchaseItem.quantityBought;
             const profitPerUnit = sellPrice - perItemCost;
             const totalProfit = profitPerUnit * quantitySold;
-            // Create a sale record
             const saleRecord = {
                 itemName: purchaseItem.itemName,
                 category: purchaseItem.category,
                 buyPrice: purchaseItem.buyPrice,
                 quantityBought: quantitySold,
-                weight: purchaseItem.weight, // include weight
+                weight: purchaseItem.weight,
                 finalCost: perItemCost * quantitySold,
                 sellPrice: sellPrice,
                 quantitySold: quantitySold,
@@ -1449,23 +1621,17 @@
                 isPurchase: false
             };
             inventory.push(saleRecord);
-            saveData();
+            await saveData();
             updateDropdown();
             renderTable();
-            updateProfitChart();
-            if (typeof updateCashFlowProjection === "function") updateCashFlowProjection();
-            if (typeof updateCategoryAnalytics === "function") updateCategoryAnalytics();
             showToast(`Sale recorded! Profit: ${formatCurrency(saleRecord.profit)}`);
-            // Reset the form after successful submission
             resetForms();
         }
-        /*********** RECORD SALE FUNCTION (FIXED) END ***********/
-        // Initialize the app
-        function init() {
+        async function init() {
+            await loadData();
             initTheme();
             document.getElementById('datePurchased').valueAsDate = new Date();
             document.getElementById('dateSold').valueAsDate = new Date();
-            // Migration: Mark existing items as purchases
             let needsMigration = false;
             inventory.forEach(item => {
                 if (item.isPurchase === undefined) {
@@ -1474,15 +1640,20 @@
                 }
             });
             if (needsMigration) {
-                saveData();
+                await saveData();
             }
             updateDropdown();
             renderTable();
-            updateProfitChart();
-            updateCashFlowProjection();
-            updateCategoryAnalytics();
         }
+        window.toggleTheme = toggleTheme;
+        window.showSection = showSection;
+        window.addPurchase = addPurchase;
+        window.recordSale = recordSale;
+        window.clearHistory = clearHistory;
+        window.renderTable = renderTable;
         window.onload = init;
+        document.getElementById('themeBtn').onclick = toggleTheme;
     </script>
 </body>
 </html>
+

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Snack Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .card {
+            max-width: 400px;
+            margin: 60px auto 0 auto;
+            background: var(--card-bg, #fff);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            padding: 30px 25px 20px 25px;
+        }
+        .form-error {
+            color: var(--error, #F44336);
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-align: center;
+            min-height: 18px;
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" id="themeBtn" type="button" style="position:fixed;top:20px;right:20px;z-index:2000;">
+        <span id="theme-icon">🌙</span> Theme
+    </button>
+    <div class="container">
+        <header>
+            <h1>🍿 Snack Tracker - Login</h1>
+        </header>
+        <div class="card">
+            <h2>Login</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required>
+                </div>
+                <div id="login-error" class="form-error"></div>
+                <button type="submit">Login</button>
+            </form>
+            <p style="text-align:center;margin-top:12px;">
+                Don't have an account? <a href="register.html">Register here</a>
+            </p>
+        </div>
+    </div>
+    <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+
+    // Theme logic
+    let currentTheme = localStorage.getItem('theme') || 'light';
+    function setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        document.getElementById('theme-icon').textContent = theme === 'dark' ? '☀️' : '🌙';
+        localStorage.setItem('theme', theme);
+    }
+    setTheme(currentTheme);
+    document.getElementById('themeBtn').onclick = () => {
+        currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        setTheme(currentTheme);
+    };
+
+    // Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSyAZ4zaX7UvzxBzVNk_z3AFhOUbIMC1XJRk",
+        authDomain: "stsync-5a398.firebaseapp.com",
+        projectId: "stsync-5a398",
+        storageBucket: "stsync-5a398.firebasestorage.app",
+        messagingSenderId: "354308192242",
+        appId: "1:354308192242:web:88244dd28aae2f7f875d6b",
+        measurementId: "G-908D6RKV30"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Check if any users exist, redirect to register if not
+    async function checkUsersExist() {
+        const usersDoc = await getDoc(doc(db, "users", "all"));
+        if (!usersDoc.exists() || !usersDoc.data().list || usersDoc.data().list.length === 0) {
+            window.location.href = "register.html";
+        }
+    }
+    checkUsersExist();
+
+    // Login logic
+    document.getElementById('loginForm').onsubmit = async function (e) {
+        e.preventDefault();
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        const errorDiv = document.getElementById('login-error');
+        errorDiv.textContent = "";
+
+        const usersDoc = await getDoc(doc(db, "users", "all"));
+        if (!usersDoc.exists() || !usersDoc.data().list) {
+            errorDiv.textContent = "No users found. Please register first.";
+            setTimeout(() => window.location.href = "register.html", 1500);
+            return;
+        }
+        const users = usersDoc.data().list;
+        const user = users.find(u => u.username === username);
+        if (!user) {
+            errorDiv.textContent = "Username not found.";
+            return;
+        }
+        if (user.password !== password) {
+            errorDiv.textContent = "Incorrect password.";
+            return;
+        }
+        // Save login state (session only)
+        sessionStorage.setItem("snackapp_user", username);
+        window.location.href = "index.html";
+    };
+    </script>
+</body>
+</html>

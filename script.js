@@ -5,13 +5,48 @@ const CATEGORIES = {
     DRINKS: 'drinks'
 };
 
+// Firebase setup (add your config!)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+
+// Your Firebase config here
+const firebaseConfig = {
+    apiKey: "AIzaSyAZ4zaX7UvzxBzVNk_z3AFhOUbIMC1XJRk",
+    authDomain: "stsync-5a398.firebaseapp.com",
+    projectId: "stsync-5a398",
+    storageBucket: "stsync-5a398.firebasestorage.app",
+    messagingSenderId: "354308192242",
+    appId: "1:354308192242:web:88244dd28aae2f7f875d6b",
+    measurementId: "G-908D6RKV30"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 // Global variables
-let inventory = JSON.parse(localStorage.getItem('snackInventory')) || [];
+let inventory = [];
 let currentTheme = localStorage.getItem('theme') || 'light';
 let profitChart = null; // Chart instance variable
 
+// Firebase: Save inventory to Firestore
+async function saveData() {
+    await setDoc(doc(db, "inventory", "main"), { list: inventory });
+}
+
+// Firebase: Load inventory from Firestore
+async function loadData() {
+    const docSnap = await getDoc(doc(db, "inventory", "main"));
+    if (docSnap.exists()) {
+        inventory = docSnap.data().list || [];
+    } else {
+        inventory = [];
+    }
+}
+
 // Initialize the app
-function init() {
+async function init() {
+    await loadData();
     initTheme();
     document.getElementById('datePurchased').valueAsDate = new Date();
     document.getElementById('dateSold').valueAsDate = new Date();
@@ -26,7 +61,7 @@ function init() {
     });
 
     if (needsMigration) {
-        saveData();
+        await saveData();
     }
 
     updateDropdown();
@@ -140,10 +175,6 @@ function formatCurrency(amount) {
         style: 'currency',
         currency: 'USD'
     }).format(amount);
-}
-
-function saveData() {
-    localStorage.setItem('snackInventory', JSON.stringify(inventory));
 }
 
 // Inventory management functions
@@ -280,7 +311,7 @@ function resetForms() {
     updateDropdown();
 }
 
-function addPurchase() {
+async function addPurchase() {
     const fields = {
         'item name': document.getElementById('itemName'),
         'buy price': document.getElementById('buyPrice'),
@@ -331,7 +362,7 @@ function addPurchase() {
         isPurchase: true
     });
 
-    saveData();
+    await saveData();
     updateDropdown();
     renderTable();
     updateProfitChart();
@@ -340,7 +371,7 @@ function addPurchase() {
 }
 
 /*********** RECORD SALE FUNCTION (FIXED, with Weight) START ***********/
-function recordSale() {
+async function recordSale() {
     const fields = {
         'item': document.getElementById('soldItem'),
         'sell price': document.getElementById('sellPrice'),
@@ -378,7 +409,7 @@ function recordSale() {
         isPurchase: false
     });
 
-    saveData();
+    await saveData();
     updateDropdown();
     renderTable();
     updateProfitChart();
@@ -387,16 +418,28 @@ function recordSale() {
 }
 /*********** RECORD SALE FUNCTION (FIXED, with Weight) END ***********/
 
-function clearHistory() {
+async function clearHistory() {
     if (confirm("⚠️ Delete ALL history? This cannot be undone!")) {
         inventory = [];
-        localStorage.removeItem('snackInventory');
+        await saveData();
         resetForms();
         updateDropdown();
         renderTable();
         updateProfitChart();
         showNotification('All data has been cleared');
     }
+}
+
+// Simple form validator
+function validateForm(fields) {
+    for (const [label, el] of Object.entries(fields)) {
+        if (!el.value || el.value.trim() === '') {
+            showNotification(`Please fill in the ${label}.`, false);
+            el.focus();
+            return false;
+        }
+    }
+    return true;
 }
 
 window.onload = init;
