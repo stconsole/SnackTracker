@@ -84,42 +84,40 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    document.getElementById('registerForm').onsubmit = async function (e) {
-        e.preventDefault();
-        const username = document.getElementById('reg-username').value.trim();
-        const password = document.getElementById('reg-password').value;
-        const password2 = document.getElementById('reg-password2').value;
-        const errorDiv = document.getElementById('register-error');
-        errorDiv.textContent = "";
+   // Replace your registration logic with this:
+document.getElementById('registerForm').onsubmit = async function (e) {
+    e.preventDefault();
+    const username = document.getElementById('reg-username').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const password2 = document.getElementById('reg-password2').value;
+    const errorDiv = document.getElementById('register-error');
+    errorDiv.textContent = "";
 
-        if (password !== password2) {
-            errorDiv.textContent = "Passwords do not match.";
-            return;
-        }
-        if (username.length < 3) {
-            errorDiv.textContent = "Username must be at least 3 characters.";
-            return;
-        }
-        if (password.length < 4) {
-            errorDiv.textContent = "Password must be at least 4 characters.";
-            return;
-        }
+    if (password !== password2) {
+        errorDiv.textContent = "Passwords do not match.";
+        return;
+    }
+    if (username.length < 3) {
+        errorDiv.textContent = "Username must be at least 3 characters.";
+        return;
+    }
+    if (password.length < 4) {
+        errorDiv.textContent = "Password must be at least 4 characters.";
+        return;
+    }
 
-        // Check if username exists
-        let usersDoc = await getDoc(doc(db, "users", "all"));
-        let users = [];
-        if (usersDoc.exists() && usersDoc.data().list) {
-            users = usersDoc.data().list;
-            if (users.find(u => u.username === username)) {
-                errorDiv.textContent = "Username already taken.";
-                return;
-            }
-        }
-        users.push({ username, password });
-        await setDoc(doc(db, "users", "all"), { list: users });
-        sessionStorage.setItem("snackapp_user", username);
-        window.location.href = "index.html";
-    };
+    // Check if username exists
+    const userDoc = await getDoc(doc(db, "users", username));
+    if (userDoc.exists()) {
+        errorDiv.textContent = "Username already taken.";
+        return;
+    }
+
+    // Create user document
+    await setDoc(doc(db, "users", username), { username, password });
+    sessionStorage.setItem("snackapp_user", username);
+    window.location.href = "index.html";
+};
     </script>
 </body>
 </html>

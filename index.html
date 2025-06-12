@@ -383,6 +383,61 @@
         }
     </style>
 </head>
+<!-- Add this modal just before </body> -->
+<div id="afkModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:4000;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;">
+    <div style="background:var(--card-bg);color:var(--text);border-radius:12px;max-width:350px;width:90vw;padding:32px 18px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">
+        <h2>Are you still there?</h2>
+        <p id="afkTimer" style="font-size:1.2em;margin:18px 0;">2:00</p>
+        <button id="afkYesBtn" style="width:100%;margin-top:10px;">Yes</button>
+    </div>
+</div>
+
+<script type="module">
+// ...existing code...
+
+let afkTimeout = null;
+let afkCountdown = null;
+let afkSecondsLeft = 120;
+
+function showAfkModal() {
+    document.getElementById('afkModal').style.display = 'flex';
+    afkSecondsLeft = 120;
+    updateAfkTimer();
+    afkCountdown = setInterval(() => {
+        afkSecondsLeft--;
+        updateAfkTimer();
+        if (afkSecondsLeft <= 0) {
+            clearInterval(afkCountdown);
+            logout();
+        }
+    }, 1000);
+}
+function hideAfkModal() {
+    document.getElementById('afkModal').style.display = 'none';
+    clearInterval(afkCountdown);
+    resetAfkTimer();
+}
+function updateAfkTimer() {
+    const min = Math.floor(afkSecondsLeft / 60);
+    const sec = afkSecondsLeft % 60;
+    document.getElementById('afkTimer').textContent = `${min}:${sec.toString().padStart(2, '0')}`;
+}
+function resetAfkTimer() {
+    clearTimeout(afkTimeout);
+    afkTimeout = setTimeout(showAfkModal, 60 * 1000); // 1 minute inactivity
+}
+document.getElementById('afkYesBtn').onclick = hideAfkModal;
+
+// Reset AFK timer on user activity
+['mousemove', 'keydown', 'mousedown', 'touchstart'].forEach(evt =>
+    document.addEventListener(evt, resetAfkTimer)
+);
+
+// Start AFK timer on load
+resetAfkTimer();
+
+// ...existing code...
+</script>
 <body>
     <button class="theme-toggle" id="themeBtn" type="button" style="position:fixed;top:20px;right:20px;z-index:2000;">
         <span id="theme-icon">🌙</span> Theme
@@ -421,24 +476,48 @@
         <button onclick="deleteAccount()" class="danger" style="width:100%;margin-top:10px;">Delete Account</button>
     </div>
 </div>
-    <div class="container">
-        <header>
-            <h1>🍿 Snack Tracker</h1>
-            <div>
-               <button onclick="exportData()" class="secondary" style="margin-right: 10px;">
-         ⬇️ Export Data
-        </button>
 
+<!-- News Button (under Profile button) -->
+<button id="newsBtn" class="theme-toggle" type="button" style="position:fixed;top:120px;right:20px;z-index:2000;">
+    <span>📰</span> News <span id="newsNotif" style="display:none;color:#2196F3;font-weight:bold;">•</span>
+</button>
+
+<!-- News Modal (anywhere in <body>, before .container is fine) -->
+<div id="newsModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:3500;background:rgba(0,0,0,0.35);align-items:center;justify-content:center;">
+    <div style="background:var(--card-bg);color:var(--text);border-radius:12px;max-width:420px;width:95vw;padding:28px 18px;box-shadow:0 8px 32px rgba(0,0,0,0.18);position:relative;">
+        <button onclick="closeNews()" style="position:absolute;top:10px;right:10px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text);">✖️</button>
+        <div style="text-align:center;">
+            <h2 style="margin-bottom:10px;">Latest News</h2>
+            <div id="newsList" style="margin-bottom:18px;text-align:left;max-height:260px;overflow-y:auto;"></div>
+            <div id="adminNewsControls" style="display:none;">
+                <textarea id="newsInput" rows="3" placeholder="Write a news update..." style="width:100%;margin-bottom:8px;"></textarea>
+                <button id="postNewsBtn" style="width:100%;">Post News</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+<header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 1px solid var(--border); gap: 20px;">
+    <span style="display: flex; align-items: center; gap: 28px;">
+        <span style="color: var(--primary); font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 1.1em;">
+            🍿 Snack Tracker
+        </span>
+    </span>
+    <div style="display: flex; align-items: center; gap: 18px;">
+        <span id="userDisplay" style="font-size:1.1em;font-weight:700;vertical-align:middle;display:inline-flex;align-items:center;gap:8px;color:#2196F3;letter-spacing:0.5px;"></span>
+        <button onclick="exportData()" class="secondary" style="margin-right: 10px;">
+            ⬇️ Export Data
+        </button>
         <button onclick="document.getElementById('importInput').click()" class="secondary">
-          ⬆️ Import Data
+            ⬆️ Import Data
         </button>
         <input type="file" id="importInput" accept=".json" style="display:none">
-
         <button onclick="clearHistory()" class="danger" style="margin-right: 10px;">
-                    🗑️ Clear Data
-                </button>
-            </div>
-        </header>
+            🗑️ Clear Data
+        </button>
+    </div>
+</header>
         <!-- Dashboard Section -->
         <div id="dashboard" class="section active">
             <div class="dashboard">
@@ -708,17 +787,19 @@ const db = getFirestore(app);
         let categoryComparisonChart = null;
         let itemPerformanceChart = null;
 
-        async function saveData() {
-            await setDoc(doc(db, "inventory", "main"), { list: inventory });
-        }
-        async function loadData() {
-            const docSnap = await getDoc(doc(db, "inventory", "main"));
-            if (docSnap.exists()) {
-                inventory = docSnap.data().list || [];
-            } else {
-                inventory = [];
-            }
-        }
+       async function saveData() {
+    const username = sessionStorage.getItem("snackapp_user");
+    await setDoc(doc(db, "inventory", username), { list: inventory });
+}
+async function loadData() {
+    const username = sessionStorage.getItem("snackapp_user");
+    const docSnap = await getDoc(doc(db, "inventory", username));
+    if (docSnap.exists()) {
+        inventory = docSnap.data().list || [];
+    } else {
+        inventory = [];
+    }
+}
 
 // Profile/Settings Modal Logic
 const profileBtn = document.getElementById('profileBtn');
@@ -740,11 +821,9 @@ function closeProfile() {
 window.closeProfile = closeProfile;
 
 async function loadUserProfile(username) {
-    const usersDoc = await getDoc(doc(db, "users", "all"));
-    if (!usersDoc.exists() || !usersDoc.data().list) return;
-    const users = usersDoc.data().list;
-    const user = users.find(u => u.username === username);
-    if (!user) return;
+    const userDoc = await getDoc(doc(db, "users", username));
+    if (!userDoc.exists()) return;
+    const user = userDoc.data();
     document.getElementById('profileUsername').value = user.username;
     profilePicPreview.src = user.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}`;
 }
@@ -767,16 +846,18 @@ profileForm.onsubmit = async function(e) {
     const password = document.getElementById('profilePassword').value;
     const password2 = document.getElementById('profilePassword2').value;
     const currentUsername = sessionStorage.getItem("snackapp_user");
-    let usersDoc = await getDoc(doc(db, "users", "all"));
-    let users = usersDoc.exists() && usersDoc.data().list ? usersDoc.data().list : [];
+
     // Username check
     if (newUsername.length < 3) {
         profileError.textContent = "Username must be at least 3 characters.";
         return;
     }
-    if (newUsername !== currentUsername && users.find(u => u.username === newUsername)) {
-        profileError.textContent = "Username already taken.";
-        return;
+    if (newUsername !== currentUsername) {
+        const newUserDoc = await getDoc(doc(db, "users", newUsername));
+        if (newUserDoc.exists()) {
+            profileError.textContent = "Username already taken.";
+            return;
+        }
     }
     // Password check
     if (password || password2) {
@@ -789,25 +870,155 @@ profileForm.onsubmit = async function(e) {
             return;
         }
     }
-    // Update user
-    const userIndex = users.findIndex(u => u.username === currentUsername);
-    if (userIndex === -1) {
+    // Load current user data
+    const userDoc = await getDoc(doc(db, "users", currentUsername));
+    if (!userDoc.exists()) {
         profileError.textContent = "User not found.";
         return;
     }
-    users[userIndex].username = newUsername;
-    if (password) users[userIndex].password = password;
-    // Profile pic
+    let user = userDoc.data();
+    user.username = newUsername;
+    if (password) user.password = password;
     if (profilePicPreview.dataset.newpic) {
-        users[userIndex].profilePic = profilePicPreview.dataset.newpic;
+        user.profilePic = profilePicPreview.dataset.newpic;
         delete profilePicPreview.dataset.newpic;
     }
-    await setDoc(doc(db, "users", "all"), { list: users });
-    sessionStorage.setItem("snackapp_user", newUsername);
+    // If username changed, create new doc and delete old
+    if (newUsername !== currentUsername) {
+        await setDoc(doc(db, "users", newUsername), user);
+        await setDoc(doc(db, "inventory", newUsername), { list: inventory }); // move inventory
+        await setDoc(doc(db, "users", currentUsername), {}); // clear old user
+        await setDoc(doc(db, "inventory", currentUsername), { list: [] }); // clear old inventory
+        sessionStorage.setItem("snackapp_user", newUsername);
+    } else {
+        await setDoc(doc(db, "users", currentUsername), user);
+    }
     showToast("Profile updated!", "success");
     closeProfile();
     location.reload();
 };
+
+// Check if current user is admin and show blue check in profile
+async function checkAdmin() {
+    const username = sessionStorage.getItem("snackapp_user");
+    const userDoc = await getDoc(doc(db, "users", username));
+    const isAdmin = userDoc.exists() && userDoc.data().isAdmin === true;
+    // Add blue check to profile input (display only)
+    if (isAdmin) {
+        document.getElementById('profileUsername').style.paddingRight = "28px";
+        if (!document.getElementById('adminCheck')) {
+            const check = document.createElement('span');
+            check.id = "adminCheck";
+            check.title = "Admin";
+            check.innerHTML = "&#10004;&#65039;";
+            check.style = "color:#2196F3;font-size:1.2em;vertical-align:middle;position:absolute;right:38px;top:38px;";
+            document.getElementById('profileUsername').parentElement.style.position = "relative";
+            document.getElementById('profileUsername').parentElement.appendChild(check);
+        }
+    }
+}
+profileBtn.addEventListener('click', checkAdmin);
+
+// --- News Button & Modal Logic ---
+
+let isAdmin = false;
+let lastSeenNews = localStorage.getItem("lastSeenNews") || "";
+
+const newsBtn = document.getElementById('newsBtn');
+const newsModal = document.getElementById('newsModal');
+const newsList = document.getElementById('newsList');
+const newsNotif = document.getElementById('newsNotif');
+const adminNewsControls = document.getElementById('adminNewsControls');
+const newsInput = document.getElementById('newsInput');
+const postNewsBtn = document.getElementById('postNewsBtn');
+
+// Check if current user is admin (for news posting)
+async function checkNewsAdmin() {
+    const username = sessionStorage.getItem("snackapp_user");
+    const userDoc = await getDoc(doc(db, "users", username));
+    isAdmin = userDoc.exists() && userDoc.data().isAdmin === true;
+    adminNewsControls.style.display = isAdmin ? "block" : "none";
+}
+newsBtn.onclick = openNews;
+
+function openNews() {
+    loadNews();
+    newsModal.style.display = "flex";
+    // Mark all news as seen
+    localStorage.setItem("lastSeenNews", latestNewsTimestamp);
+    newsNotif.style.display = "none";
+    checkNewsAdmin();
+}
+function closeNews() {
+    newsModal.style.display = "none";
+}
+window.closeNews = closeNews;
+
+// Load and display news
+let latestNewsTimestamp = "";
+async function loadNews() {
+    const newsDoc = await getDoc(doc(db, "news", "main"));
+    let newsArr = [];
+    if (newsDoc.exists() && Array.isArray(newsDoc.data().list)) {
+        newsArr = newsDoc.data().list.sort((a, b) => b.timestamp - a.timestamp);
+    }
+    newsList.innerHTML = newsArr.length
+        ? newsArr.map(n => `<div style="margin-bottom:12px;"><b>${n.author}${n.isAdmin ? ' <span style=\'color:#2196F3;font-size:1.1em;vertical-align:middle;\' title=\'Admin\'>&#10004;&#65039;</span>' : ''}</b> <span style="color:#888;font-size:0.95em;">${new Date(n.timestamp).toLocaleString()}</span><br>${n.text}</div>`).join("")
+        : "<div style='color:#888;'>No news yet.</div>";
+    latestNewsTimestamp = newsArr[0]?.timestamp || "";
+    adminNewsControls.style.display = isAdmin ? "block" : "none";
+    newsInput.value = "";
+}
+
+// Post news (admin only)
+if (postNewsBtn) {
+    postNewsBtn.onclick = async function() {
+        const text = newsInput.value.trim();
+        if (!text) return;
+        const username = sessionStorage.getItem("snackapp_user");
+        const userDoc = await getDoc(doc(db, "users", username));
+        const isAdminUser = userDoc.exists() && userDoc.data().isAdmin === true;
+        if (!isAdminUser) {
+            showToast("Only admins can post news.", "error");
+            return;
+        }
+        // Get current news
+        const newsDoc = await getDoc(doc(db, "news", "main"));
+        let newsArr = [];
+        if (newsDoc.exists() && Array.isArray(newsDoc.data().list)) {
+            newsArr = newsDoc.data().list;
+        }
+        newsArr.push({
+            text,
+            author: username,
+            isAdmin: true,
+            timestamp: Date.now()
+        });
+        await setDoc(doc(db, "news", "main"), { list: newsArr });
+        loadNews();
+        showToast("News posted!", "success");
+    };
+}
+
+// Show notification dot if unseen news
+async function checkNewsNotif() {
+    const newsDoc = await getDoc(doc(db, "news", "main"));
+    if (newsDoc.exists() && Array.isArray(newsDoc.data().list) && newsDoc.data().list.length > 0) {
+        const latest = newsDoc.data().list.sort((a, b) => b.timestamp - a.timestamp)[0];
+        if (latest && String(latest.timestamp) !== String(localStorage.getItem("lastSeenNews"))) {
+            newsNotif.style.display = "inline";
+        } else {
+            newsNotif.style.display = "none";
+        }
+    } else {
+        newsNotif.style.display = "none";
+    }
+}
+setInterval(checkNewsNotif, 10000); // Check every 10s
+window.addEventListener('focus', checkNewsNotif);
+checkNewsNotif();
+
+// --- END News Button & Modal Logic ---
 
 function logout() {
     sessionStorage.removeItem("snackapp_user");
@@ -818,10 +1029,8 @@ window.logout = logout;
 async function deleteAccount() {
     if (!confirm("Are you sure you want to delete your account? This cannot be undone!")) return;
     const username = sessionStorage.getItem("snackapp_user");
-    let usersDoc = await getDoc(doc(db, "users", "all"));
-    let users = usersDoc.exists() && usersDoc.data().list ? usersDoc.data().list : [];
-    users = users.filter(u => u.username !== username);
-    await setDoc(doc(db, "users", "all"), { list: users });
+    await setDoc(doc(db, "users", username), {});
+    await setDoc(doc(db, "inventory", username), { list: [] });
     sessionStorage.removeItem("snackapp_user");
     showToast("Account deleted.", "success");
     setTimeout(() => window.location.href = "register.html", 1200);
@@ -1645,14 +1854,36 @@ function updateChartsTheme() {
             updateDropdown();
             renderTable();
         }
-        window.toggleTheme = toggleTheme;
-        window.showSection = showSection;
-        window.addPurchase = addPurchase;
-        window.recordSale = recordSale;
-        window.clearHistory = clearHistory;
-        window.renderTable = renderTable;
-        window.onload = init;
-        document.getElementById('themeBtn').onclick = toggleTheme;
+
+async function updateUserDisplay() {
+    const username = sessionStorage.getItem("snackapp_user");
+    if (!username) return;
+    const userDoc = await getDoc(doc(db, "users", username));
+    let html = `<span style="color:#2196F3;font-weight:700;font-size:1.1em;">${username}</span>`;
+    if (userDoc.exists() && userDoc.data().isAdmin === true) {
+        html += ' <span style="color:#2196F3;font-size:1.2em;vertical-align:middle;" title="Admin">&#10004;&#65039;</span>';
+    }
+    // Add profile pic after check
+    const profilePic = userDoc.exists() && userDoc.data().profilePic
+        ? userDoc.data().profilePic
+        : `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}`;
+    html += ` <img src="${profilePic}" alt="Profile" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid #2196F3;margin-left:4px;vertical-align:middle;">`;
+    document.getElementById('userDisplay').innerHTML = html;
+}
+
+window.toggleTheme = toggleTheme;
+window.showSection = showSection;
+window.addPurchase = addPurchase;
+window.recordSale = recordSale;
+window.clearHistory = clearHistory;
+window.renderTable = renderTable;
+
+// Only ONE window.onload assignment!
+window.onload = async function() {
+    await init();
+    updateUserDisplay();
+};
+document.getElementById('themeBtn').onclick = toggleTheme;
     </script>
 </body>
 </html>

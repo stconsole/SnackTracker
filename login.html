@@ -89,34 +89,26 @@
     }
     checkUsersExist();
 
-    // Login logic
-    document.getElementById('loginForm').onsubmit = async function (e) {
-        e.preventDefault();
-        const username = document.getElementById('username').value.trim();
-        const password = document.getElementById('password').value;
-        const errorDiv = document.getElementById('login-error');
-        errorDiv.textContent = "";
+  document.getElementById('loginForm').onsubmit = async function (e) {
+    e.preventDefault();
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const errorDiv = document.getElementById('login-error');
+    errorDiv.textContent = "";
 
-        const usersDoc = await getDoc(doc(db, "users", "all"));
-        if (!usersDoc.exists() || !usersDoc.data().list) {
-            errorDiv.textContent = "No users found. Please register first.";
-            setTimeout(() => window.location.href = "register.html", 1500);
-            return;
-        }
-        const users = usersDoc.data().list;
-        const user = users.find(u => u.username === username);
-        if (!user) {
-            errorDiv.textContent = "Username not found.";
-            return;
-        }
-        if (user.password !== password) {
-            errorDiv.textContent = "Incorrect password.";
-            return;
-        }
-        // Save login state (session only)
-        sessionStorage.setItem("snackapp_user", username);
-        window.location.href = "index.html";
-    };
+    const userDoc = await getDoc(doc(db, "users", username));
+    if (!userDoc.exists()) {
+        errorDiv.textContent = "Username not found.";
+        return;
+    }
+    const user = userDoc.data();
+    if (user.password !== password) {
+        errorDiv.textContent = "Incorrect password.";
+        return;
+    }
+    sessionStorage.setItem("snackapp_user", username);
+    window.location.href = "index.html";
+};
     </script>
 </body>
 </html>
